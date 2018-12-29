@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"github.com/Mimerel/go-logger-client"
 	"github.com/op/go-logging"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -14,6 +17,8 @@ import (
 
 type configuration struct {
 	Token string `yaml:"token,omitempty"`
+	Elasticsearch Elasticsearch `yaml:"elasticSearch,omitempty"`
+	Host string `yaml:"host,omitempty"`
 	Port string `yaml:"port,omitempty"`
 	Ignore []Period `yaml:"ignore,omitempty"`
 }
@@ -23,7 +28,9 @@ type Period struct {
 	To int `yaml:"to,omitempty"`
 }
 
-
+type Elasticsearch struct {
+	Url string `yaml:"url,omitempty"`
+}
 
 var log = logging.MustGetLogger("default")
 
@@ -92,6 +99,12 @@ func SendProwlNotification(w http.ResponseWriter, r *http.Request, urlParams []s
 		if err != nil {
 			w.WriteHeader(500)
 		} else {
+			if config.Elasticsearch.Url != "" {
+				err := sendToElasticSearch(config, AppName, Event, Description)
+				if err != nil {
+					fmt.Printf("Unable to store prowl event in elasticsearch")
+				}
+			}
 			w.WriteHeader(200)
 		}
 	} else {
@@ -103,9 +116,52 @@ func sendNotification(config *configuration) (bool) {
 	hour := time.Now().Hour() * 100
 	now := hour + time.Now().Minute()
 	for _, moment := range config.Ignore {
-		if now >= moment.From && now < moment.To {
+		if now >= moment.From && now <= moment.To {
 			return false
 		}
 	}
 	return true
+}
+
+func sendToElasticSearch(config *configuration, AppName string, Event string, Description string) (err error) {
+	body := createsBodyForElasticSearchCreation(config, AppName, Event, Description)
+	timeout := time.Duration(30 * time.Second)
+	client := http.Client{
+		Timeout: timeout,
+	}
+	postingUrl := config.Elasticsearch.Url + "/_bulk"
+	logs.Info(config.Elasticsearch.Url, config.Host, fmt.Sprintf("Starting to post body %s \n", postingUrl))
+
+	resp, err := client.Post(postingUrl, "application/json" , bytes.NewBuffer([]byte(body)))
+	if err != nil {
+		logs.Error(config.Elasticsearch.Url, config.Host, fmt.Sprintf("Failed to post request to elasticSearch %s \n", err))
+	}
+	temp, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		logs.Error(config.Elasticsearch.Url, config.Host, fmt.Sprintf("Failed to read response from elasticSearch %s \n", err))
+	}
+	logs.Info(config.Elasticsearch.Url, config.Host, fmt.Sprintf("response Body : %s \n", temp))
+
+	resp.Body.Close()
+	logs.Info(config.Elasticsearch.Url, config.Host, fmt.Sprintf("Metrics successfully sent to Elasticsearch \n"))
+
+	return nil
+}
+
+
+func createsBodyForElasticSearchCreation(config *configuration, AppName string, Event string, Description string) (body string) {
+	moment := time.Now().Unix()
+	timestamp2 := time.Unix(moment, 0).Format(time.RFC3339)
+	timestamp := strconv.FormatInt(moment, 10)
+	body = body + "{ 'update': { '_id': '" + timestamp  + "_" + config.Host + "', '_type': 'events', '_index': 'prowl' }}\n"
+	body = body + "{ 'doc': { "
+	body = body + " 'application': '" + AppName + "'"
+	body = body + ", 'event': '" +  Event + "'"
+	body = body + ", 'description': '" + Description + "'"
+	body = body + ", 'value': 1"
+	body = body + ", 'timestamp': '" + timestamp + "'"
+	body = body + ", 'timestamp2': '" + timestamp2 + "'"
+	body = body + "}, 'doc_as_upsert' : true }\n"
+	body = strings.Replace(body, "'", "\"", -1)
+	return body
 }
