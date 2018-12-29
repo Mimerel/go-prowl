@@ -143,20 +143,20 @@ func sendToElasticSearch(config *configuration, AppName string, Event string, De
 		Timeout: timeout,
 	}
 	postingUrl := config.Elasticsearch.Url + "/_bulk"
-	logs.Info(config.Elasticsearch.Url, config.Host, fmt.Sprintf("Starting to post body %s \n", postingUrl))
+	logs.Info(config.Elasticsearch.Url, config.Host, fmt.Sprintf("Starting to post body"))
 
 	resp, err := client.Post(postingUrl, "application/json" , bytes.NewBuffer([]byte(body)))
 	if err != nil {
-		logs.Error(config.Elasticsearch.Url, config.Host, fmt.Sprintf("Failed to post request to elasticSearch %s \n", err))
+		logs.Error(config.Elasticsearch.Url, config.Host, fmt.Sprintf("Failed to post request to elasticSearch %s ", err))
 	}
 	temp, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		logs.Error(config.Elasticsearch.Url, config.Host, fmt.Sprintf("Failed to read response from elasticSearch %s \n", err))
+		logs.Error(config.Elasticsearch.Url, config.Host, fmt.Sprintf("Failed to read response from elasticSearch %s ", err))
 	}
-	logs.Info(config.Elasticsearch.Url, config.Host, fmt.Sprintf("response Body : %s \n", temp))
+	logs.Info(config.Elasticsearch.Url, config.Host, fmt.Sprintf("response Body %s ", temp))
 
 	resp.Body.Close()
-	logs.Info(config.Elasticsearch.Url, config.Host, fmt.Sprintf("Metrics successfully sent to Elasticsearch \n"))
+	logs.Info(config.Elasticsearch.Url, config.Host, fmt.Sprintf("Event successfully sent to Elasticsearch "))
 
 	return nil
 }
