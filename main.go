@@ -60,6 +60,9 @@ func main() {
 	http.ListenAndServe(":" + Port, nil)
 }
 
+/**
+Reads configuration file
+ */
 func readConfiguration() (configuration) {
 	pathToFile := os.Getenv("LOGGER_CONFIGURATION_FILE")
 	if _, err := os.Stat("./configuration.yaml"); !os.IsNotExist(err) {
@@ -84,6 +87,9 @@ func readConfiguration() (configuration) {
 	return config
 }
 
+/**
+Sends Prowl notification
+ */
 func SendProwlNotification(w http.ResponseWriter, r *http.Request, urlParams []string, config *configuration) {
 	AppName := urlParams[1]
 	Event := urlParams[2]
@@ -112,6 +118,10 @@ func SendProwlNotification(w http.ResponseWriter, r *http.Request, urlParams []s
 	}
 }
 
+/**
+Checks if the notification is in the authorized times
+otherwise ignores the notification
+ */
 func sendNotification(config *configuration) (bool) {
 	hour := time.Now().Hour() * 100
 	now := hour + time.Now().Minute()
@@ -123,6 +133,9 @@ func sendNotification(config *configuration) (bool) {
 	return true
 }
 
+/**
+Sends notification to ElasticSearch for storing
+ */
 func sendToElasticSearch(config *configuration, AppName string, Event string, Description string) (err error) {
 	body := createsBodyForElasticSearchCreation(config, AppName, Event, Description)
 	timeout := time.Duration(30 * time.Second)
