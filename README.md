@@ -39,6 +39,11 @@ then
 You will probably be missing dependencies
 
 to add a dependency run 
+```
+	gopkg.in/yaml.v2
+	github.com/Mimerel/go-logger-client
+   	github.com/op/go-logging
+```
 
 ```
 go get <name of dependency>
