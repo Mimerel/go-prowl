@@ -2,9 +2,7 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/Mimerel/go-logger-client"
-	"github.com/op/go-logging"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"net/http"
@@ -21,6 +19,7 @@ type configuration struct {
 	Host string `yaml:"host,omitempty"`
 	Port string `yaml:"port,omitempty"`
 	Ignore []Period `yaml:"ignore,omitempty"`
+	Logger logs.LogParams
 }
 
 type Period struct {
@@ -32,21 +31,10 @@ type Elasticsearch struct {
 	Url string `yaml:"url,omitempty"`
 }
 
-var log = logging.MustGetLogger("default")
-
-var format = logging.MustStringFormatter(
-	`%{color}%{time:15:04:05.000} %{shortfunc} ▶ %{level:.4s} %{color:reset} %{message}`,
-)
-
 
 func main() {
-	backend := logging.NewLogBackend(os.Stderr, "", 0)
-	backendFormatter := logging.NewBackendFormatter(backend, format)
-	backendLeveled := logging.AddModuleLevel(backend)
-	backendLeveled.SetLevel(logging.NOTICE, "")
-	logging.SetBackend(backendLeveled, backendFormatter)
-
 	config := readConfiguration()
+
 	Port := config.Port
 	http.HandleFunc("/", func (w http.ResponseWriter, r *http.Request) {
 		urlPath := r.URL.Path
@@ -82,7 +70,8 @@ func readConfiguration() (configuration) {
 	if err != nil {
 		panic(err)
 	} else {
-		fmt.Printf("Configuration Loaded : %+v \n", config)
+		config.Logger = logs.New(config.Elasticsearch.Url, config.Host)
+		config.Logger.Info("Configuration Loaded : %+v \n", config)
 	}
 	return config
 }
@@ -108,7 +97,7 @@ func SendProwlNotification(w http.ResponseWriter, r *http.Request, urlParams []s
 			if config.Elasticsearch.Url != "" {
 				err := sendToElasticSearch(config, AppName, Event, Description)
 				if err != nil {
-					fmt.Printf("Unable to store prowl event in elasticsearch")
+					config.Logger.Error("Unable to store prowl event in elasticsearch")
 				}
 			}
 			w.WriteHeader(200)
@@ -143,20 +132,20 @@ func sendToElasticSearch(config *configuration, AppName string, Event string, De
 		Timeout: timeout,
 	}
 	postingUrl := config.Elasticsearch.Url + "/_bulk"
-	logs.Info(config.Elasticsearch.Url, config.Host, fmt.Sprintf("Starting to post body"))
+	config.Logger.Info("Starting to post body")
 
 	resp, err := client.Post(postingUrl, "application/json" , bytes.NewBuffer([]byte(body)))
 	if err != nil {
-		logs.Error(config.Elasticsearch.Url, config.Host, fmt.Sprintf("Failed to post request to elasticSearch %s ", err))
+		config.Logger.Error("Failed to post request to elasticSearch %s ", err)
 	}
 	temp, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		logs.Error(config.Elasticsearch.Url, config.Host, fmt.Sprintf("Failed to read response from elasticSearch %s ", err))
+		config.Logger.Error("Failed to read response from elasticSearch %s ", err)
 	}
-	logs.Info(config.Elasticsearch.Url, config.Host, fmt.Sprintf("response Body %s ", temp))
+	config.Logger.Info("response Body %s ", temp)
 
 	resp.Body.Close()
-	logs.Info(config.Elasticsearch.Url, config.Host, fmt.Sprintf("Event successfully sent to Elasticsearch "))
+	config.Logger.Info("Event successfully sent to Elasticsearch ")
 
 	return nil
 }
